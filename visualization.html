@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enhanced Hypercube Random Walk Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .controls, .stats {
+            margin-bottom: 20px;
+        }
+        .controls label, .stats span {
+            margin-right: 10px;
+        }
+        .chart-container {
+            margin-bottom: 20px;
+        }
+        canvas {
+            width: 100%;
+            height: 200px;
+            margin-bottom: 20px;
+        }
+        #currentState {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 20px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Enhanced Hypercube Random Walk Visualization</h1>
+    <div class="controls">
+        <label for="dimensions">Dimensions (n):</label>
+        <input type="number" id="dimensions" min="2" max="20" value="10">
+        <label for="speed">Speed:</label>
+        <input type="range" id="speed" min="1" max="1000" value="100">
+        <span id="speedDisplay">100 steps/s</span>
+        <button id="startStop">Start</button>
+        <button id="reset">Reset</button>
+    </div>
+    <div class="stats">
+        <span id="stepCount">Steps: 0</span>
+        <span id="index2Count">Index 2 count: 0</span>
+        <span id="avgStateValue">Avg State Value: 0</span>
+    </div>
+    <div class="chart-container">
+        <canvas id="indexChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="stateChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="distanceChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="stateValueChart"></canvas>
+    </div>
+    <div id="currentState">Current state: 0000000000 (0)</div>
+
+    <script>
+        let indexChart, stateChart, distanceChart, stateValueChart;
+        let running = false;
+        let vertex, n, indexResults, stateResults, distanceData, avgStateData, currentStateData;
+        let intervalId, stepsTaken = 0, speed = 100, index2Count = 0;
+        let totalStateValue = 0;
+        const MAX_STATE_BINS = 1000;
+        const MAX_DATA_POINTS = 1000;
+
+        const startStopButton = document.getElementById('startStop');
+        const resetButton = document.getElementById('reset');
+        const speedSlider = document.getElementById('speed');
+        const speedDisplay = document.getElementById('speedDisplay');
+        const stepCountSpan = document.getElementById('stepCount');
+        const index2CountSpan = document.getElementById('index2Count');
+        const avgStateValueSpan = document.getElementById('avgStateValue');
+        const currentStateDiv = document.getElementById('currentState');
+
+        function initializeSimulation() {
+            n = parseInt(document.getElementById('dimensions').value);
+            vertex = new Array(n).fill(0);
+            indexResults = new Array(n + 1).fill(0);
+            const numStates = Math.min(Math.pow(2, n), MAX_STATE_BINS);
+            stateResults = new Array(numStates).fill(0);
+            distanceData = { normal: [], uniform: [] };
+            avgStateData = [];
+            currentStateData = [];
+            indexResults[0] = 1;
+            stateResults[0] = 1;
+            stepsTaken = 0;
+            index2Count = 0;
+            totalStateValue = 0;
+            updateCharts();
+            updateStats();
+        }
+
+        function runStep() {
+            const index = Math.floor(Math.random() * n);
+            vertex[index] = 1 - vertex[index];
+            const onesCount = vertex.reduce((sum, bit) => sum + bit, 0);
+            const stateNumber = parseInt(vertex.join(''), 2);
+            indexResults[onesCount]++;
+            const binIndex = Math.floor(stateNumber * stateResults.length / Math.pow(2, n));
+            stateResults[binIndex]++;
+            if (onesCount === 2) index2Count++;
+            totalStateValue += stateNumber;
+            stepsTaken++;
+            updateCharts();
+            updateStats();
+        }
+
+        function updateStats() {
+            const normalDist = calculateNormalDistance();
+            const uniformDist = calculateUniformDistance();
+            distanceData.normal.push(normalDist);
+            distanceData.uniform.push(uniformDist);
+            const avgState = totalStateValue / stepsTaken;
+            avgStateData.push(avgState);
+            const currentState = parseInt(vertex.join(''), 2);
+            currentStateData.push(currentState);
+            
+            stepCountSpan.textContent = `Steps: ${stepsTaken}`;
+            index2CountSpan.textContent = `Index 2 count: ${index2Count}`;
+            avgStateValueSpan.textContent = `Avg State Value: ${avgState.toFixed(2)}`;
+            
+            const binaryString = vertex.join('');
+            currentStateDiv.textContent = `Current state: ${binaryString} (${currentState})`;
+        }
+
+        function calculateNormalDistance() {
+            const total = indexResults.reduce((sum, count) => sum + count, 0);
+            const mean = n / 2;
+            const stdDev = Math.sqrt(n / 4);
+            return indexResults.reduce((sum, count, i) => {
+                const expected = total * Math.exp(-Math.pow(i - mean, 2) / (2 * Math.pow(stdDev, 2))) / (stdDev * Math.sqrt(2 * Math.PI));
+                return sum + Math.pow((count - expected) / total, 2);
+            }, 0);
+        }
+
+        function calculateUniformDistance() {
+            const total = stateResults.reduce((sum, count) => sum + count, 0);
+            const expected = total / stateResults.length;
+            return stateResults.reduce((sum, count) => sum + Math.pow((count - expected) / total, 2), 0);
+        }
+
+        function updateCharts() {
+            updateIndexChart();
+            updateStateChart();
+            updateDistanceChart();
+            updateStateValueChart();
+        }
+
+        function updateIndexChart() {
+            const labels = Array.from({length: n + 1}, (_, i) => i);
+            const total = indexResults.reduce((sum, count) => sum + count, 0);
+            const data = indexResults.map(count => count / total);
+
+            if (indexChart) {
+                indexChart.data.labels = labels;
+                indexChart.data.datasets[0].data = data;
+                indexChart.update();
+            } else {
+                indexChart = new Chart(document.getElementById('indexChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Probability',
+                            data: data,
+                            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        animation: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Distribution of 1s Count in ${n}-dimensional Hypercube`
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateStateChart() {
+            const labels = Array.from({length: stateResults.length}, (_, i) => i);
+            const total = stateResults.reduce((sum, count) => sum + count, 0);
+            const data = stateResults.map(count => count / total);
+
+            if (stateChart) {
+                stateChart.data.labels = labels;
+                stateChart.data.datasets[0].data = data;
+                stateChart.update();
+            } else {
+                stateChart = new Chart(document.getElementById('stateChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Probability',
+                            data: data,
+                            backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        animation: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Distribution of States in ${n}-dimensional Hypercube`
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateDistanceChart() {
+            if (distanceChart) {
+                distanceChart.data.labels.push(stepsTaken);
+                distanceChart.data.datasets[0].data.push(distanceData.normal[distanceData.normal.length - 1]);
+                distanceChart.data.datasets[1].data.push(distanceData.uniform[distanceData.uniform.length - 1]);
+                if (distanceChart.data.labels.length > MAX_DATA_POINTS) {
+                    distanceChart.data.labels.shift();
+                    distanceChart.data.datasets[0].data.shift();
+                    distanceChart.data.datasets[1].data.shift();
+                }
+                distanceChart.update();
+            } else {
+                distanceChart = new Chart(document.getElementById('distanceChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [0],
+                        datasets: [{
+                            label: 'Distance from Normal',
+                            data: [distanceData.normal[0]],
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false
+                        }, {
+                            label: 'Distance from Uniform',
+                            data: [distanceData.uniform[0]],
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        animation: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Distance from Ideal Distributions Over Time'
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateStateValueChart() {
+            if (stateValueChart) {
+                stateValueChart.data.labels.push(stepsTaken);
+                stateValueChart.data.datasets[0].data.push(avgStateData[avgStateData.length - 1]);
+                stateValueChart.data.datasets[1].data.push(currentStateData[currentStateData.length - 1]);
+                if (stateValueChart.data.labels.length > MAX_DATA_POINTS) {
+                    stateValueChart.data.labels.shift();
+                    stateValueChart.data.datasets[0].data.shift();
+                    stateValueChart.data.datasets[1].data.shift();
+                }
+                stateValueChart.update();
+            } else {
+                stateValueChart = new Chart(document.getElementById('stateValueChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [0],
+                        datasets: [{
+                            label: 'Average State Value',
+                            data: [avgStateData[0]],
+                            borderColor: 'rgba(153, 102, 255, 1)',
+                            fill: false
+                        }, {
+                            label: 'Current State Value',
+                            data: [currentStateData[0]],
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        animation: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Average and Current State Values Over Time'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                suggestedMax: Math.pow(2, n) - 1
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateSimulationSpeed() {
+            speed = parseInt(speedSlider.value);
+            speedDisplay.textContent = `${speed} steps/s`;
+            if (running) {
+                clearInterval(intervalId);
+                intervalId = setInterval(runStep, 1000 / speed);
+            }
+        }
+
+        startStopButton.addEventListener('click', () => {
+            if (running) {
+                clearInterval(intervalId);
+                startStopButton.textContent = 'Start';
+                running = false;
+            } else {
+                intervalId = setInterval(runStep, 1000 / speed);
+                startStopButton.textContent = 'Stop';
+                running = true;
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            if (running) {
+                clearInterval(intervalId);
+                startStopButton.textContent = 'Start';
+                running = false;
+            }
+            initializeSimulation();
+        });
+
+        speedSlider.addEventListener('input', updateSimulationSpeed);
+
+        initializeSimulation();
+        updateSimulationSpeed();
+    </script>
+</body>
+</html>
