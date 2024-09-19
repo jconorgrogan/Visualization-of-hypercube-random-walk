@@ -24,9 +24,9 @@ Average and current state values as the walk progresses
 
 Educational Value: It demonstrates important concepts in probability theory, such as:
 
-How high-dimensional random walks behave
-The emergence of normal distributions (due to the Central Limit Theorem)
-Convergence to uniform distributions in state space
+-How high-dimensional random walks behave
+-The emergence of normal distributions (due to the Central Limit Theorem)
+-Convergence to uniform distributions in state space
 
 
 Interactive Elements: Users can start, stop, reset, and adjust the speed of the simulation, allowing for exploration of how different parameters affect the walk's behavior.
